@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#081321">
+  <title>DjShrek VPN — Global connection</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="shell">
+    <nav><div class="brand"><span class="mark">D</span> DjShrek <b>VPN</b></div><span class="pill">GLOBAL NETWORK</span></nav>
+    <section class="hero">
+      <div class="eyebrow">PRIVATE NETWORK · 5 LOCATIONS</div>
+      <h1>Your connection.<br><em>Your choice.</em></h1>
+      <p class="lead">Пять международных VPN-узлов. Проверка доступности и подбор подключения с учётом задержки.</p>
+      <div class="actions"><a class="primary" href="#locations">Выбрать локацию <span>↗</span></a><a class="secondary" href="/docs">API документация</a></div>
+      <div class="status"><i></i><span id="health">Проверяем состояние API…</span></div>
+    </section>
+    <section id="locations" class="locations">
+      <div class="section-head"><div><div class="eyebrow">NETWORK MAP</div><h2>Пять точек присутствия</h2></div><button id="refresh">Обновить ↻</button></div>
+      <div id="nodes" class="grid"></div>
+      <p class="disclaimer">Локации отображаются как планируемые узлы. Реальные адреса, статусы и задержки появятся после настройки VPS. Показатель API не равен задержке с устройства клиента.</p>
+    </section>
+    <footer><span>© DjShrek VPN</span><span>Secure by design · Built for everywhere</span></footer>
+  </main>
+<script>
+const flags={"Germany":"🇩🇪","Finland":"🇫🇮","Netherlands":"🇳🇱","Poland":"🇵🇱","United States":"🇺🇸"};
+async function load(){
+ const el=document.querySelector('#nodes'); el.innerHTML='<div class="loading">Загрузка статусов…</div>';
+ try{
+  const r=await fetch('/api/nodes'); const data=await r.json();
+  el.innerHTML=data.nodes.map(n=>`<article class="node"><div class="node-top"><span class="flag">${flags[n.country]||'🌐'}</span><span class="state ${n.online?'up':'down'}">${n.online?'ONLINE':'OFFLINE'}</span></div><h3>${n.country}</h3><p>${n.city}</p><div class="latency">${n.latency_ms===null?'—':n.latency_ms+' ms'} <small>API → node</small></div></article>`).join('');
+  document.querySelector('#health').textContent='API работает · данные мониторинга обновлены';
+ }catch(e){el.innerHTML='<div class="loading">API пока недоступен</div>';document.querySelector('#health').textContent='Не удалось связаться с API';}
+}
+document.querySelector('#refresh').addEventListener('click',load); load();
+</script>
+</body></html>
