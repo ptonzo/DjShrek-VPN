@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 from .config import settings
-from .nodes import NODES, all_node_status, select_server_side_fallback
+from .nodes import configured_nodes, all_node_status, select_server_side_fallback
 from .store import connect, init_db
 from .security import current_user_id, issue_access_token, password_hash, password_verify, require_admin
 from .billing import billing_status
@@ -50,7 +50,7 @@ async def nodes():
 
 @app.get("/api/nodes/catalog")
 async def node_catalog():
-    return {"nodes": [n.__dict__ for n in NODES]}
+    return {"nodes": [n.__dict__ for n in configured_nodes()]}
 
 @app.get("/api/nodes/recommended")
 async def recommended_node():
@@ -112,6 +112,14 @@ def issue_subscription(data: SubscriptionRequest):
         sub_id = cur.lastrowid
     return {"subscription_id": sub_id, "subscription_url": f"{settings.public_base_url.rstrip('/')}/s/{raw_token}",
             "expires_at": expires, "warning": "Treat this URL as a password. Share it only with the customer."}
+
+@app.post("/api/admin/subscriptions/{subscription_id}/revoke", dependencies=[Depends(require_admin)])
+def revoke_subscription(subscription_id: int):
+    with connect() as db:
+        cur = db.execute("UPDATE subscriptions SET active=0 WHERE id=?", (subscription_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"status": "revoked", "subscription_id": subscription_id}
 
 @app.get("/s/{token}", response_class=PlainTextResponse)
 def subscription(token: str):
