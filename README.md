@@ -2,49 +2,57 @@
 
 Global VPN subscription platform with five paid, globally reachable exit nodes.
 
-> **Status: bootstrap scaffold.** This repository does not contain deployed VPN servers, working credentials, payment-provider credentials, or a production-ready subscription service yet.
+> **Status: development scaffold (v0.2).** Account registration/login, token-based subscription delivery endpoints, a landing page, and node health API are implemented. This is not yet a production VPN: real VPS nodes, Xray inbounds, billing webhooks, and deployment credentials must still be configured and tested.
 
 ## Product scope
 
-- Public landing page and account dashboard
-- Telegram bot integration
-- VLESS client subscription delivery for compatible clients such as Happ
-- Five paid VPN nodes in Germany, Finland, Netherlands, Poland, and the United States
-- Server health checks and latency-aware node selection
-- Subscription lifecycle and payment-provider integration (provider adapter to be configured)
-- QR-code generation for client setup
+- Public landing page and account API
+- Five global VPN nodes: Germany, Finland, Netherlands, Poland, United States
+- Server-side node health checks and latency fallback
+- Customer accounts and bearer-token authentication
+- Admin-issued subscription entitlements
+- Base64 VLESS subscription response for compatible clients such as Happ
+- Docker Compose deployment foundation
 
-## Architecture
+## Stack
 
-- **API:** FastAPI, Python 3.12
-- **Web:** static responsive landing page (initial scaffold)
-- **Database:** PostgreSQL (production); SQLite-friendly local bootstrap can be added
-- **Node layer:** Xray/VLESS Reality on separately provisioned VPS instances
-- **Operations:** Docker Compose and environment-based configuration
-
-## Important networking note
-
-A server cannot reliably determine the best node for every client by measuring latency from the API host. The API exposes node health and a selection endpoint as a first-pass fallback. The eventual client flow should measure latency from the user's device (or use client-side URL-test features) and choose the best reachable node. No ping values are hard-coded or represented as live measurements.
+- FastAPI / Python 3.12
+- SQLite for bootstrap; use managed PostgreSQL before production scale
+- Xray/VLESS Reality on separately provisioned VPS instances
+- Docker Compose and environment-based configuration
 
 ## Quick start
 
-1. Copy `.env.example` to `.env` and set a strong `APP_SECRET`.
-2. Start the API: `docker compose up --build`.
-3. Open `http://localhost:8000` and `http://localhost:8000/docs`.
+```bash
+cp .env.example .env
+# Set APP_SECRET and DJSHREK_ADMIN_API_KEY to unique random values
+docker compose up --build
+```
 
-The demo node catalog is configuration only. Set real hostnames, probe ports, and Xray inbounds after provisioning the five VPS nodes.
+Open `http://localhost:8000` and `http://localhost:8000/docs`.
 
-## Security
+## Provisioning the five nodes
 
-- Never commit `.env`, private keys, Reality keys, client UUIDs, payment secrets, bot tokens, or production subscription URLs.
-- Public repository visibility is intentional; customer data and server credentials must stay in private infrastructure.
-- Before charging customers, implement and test payment webhooks, subscription revocation, abuse handling, privacy policy, terms, and applicable local legal requirements.
+Set `NODE_CONFIG_JSON` as a private environment variable in the deployment environment. It must be a JSON array with entries for the fixed IDs `de-1`, `fi-1`, `nl-1`, `pl-1`, and `us-1`. Each entry needs `host`, `probe_port`, and a complete customer-facing `vless_uri`. Keep this configuration out of Git. The URI must contain valid server-side Xray parameters and must be tested with Happ before customer distribution.
 
-## Planned milestones
+The server-side probe measures TCP reachability and latency from the API host. It is not the customer's real ping. For global users, configure client-side latency testing in the client or app and select the lowest-latency healthy endpoint from the device.
 
-1. Bootstrap API and public landing page.
-2. Provision and harden five paid VPS nodes.
-3. Configure Xray and issue per-user VLESS credentials.
-4. Implement customer accounts, subscriptions, and payment webhooks.
-5. Generate secure Happ-compatible subscription links and QR codes.
-6. Add client-side latency testing, monitoring, alerts, and production deployment.
+## Accounts and subscriptions
+
+See [API documentation](docs/API.md). Registration and login return short-lived bearer tokens. Admin subscription issuance is protected by `DJSHREK_ADMIN_API_KEY`. Subscription URLs are bearer secrets: do not expose them in logs, screenshots, analytics, or public issue trackers.
+
+## Billing status
+
+Payment is intentionally disabled. A production payment provider must be selected and its signed webhook implemented before money is accepted or paid subscriptions are activated. Never grant access based only on a browser redirect.
+
+## Production checklist
+
+- [ ] Provision and harden five paid VPS instances.
+- [ ] Install and configure Xray on each node; validate inbound reachability.
+- [ ] Set strong secrets through the hosting provider's secret manager.
+- [ ] Use PostgreSQL, automated backups, TLS, firewalling, rate limits, and monitoring.
+- [ ] Implement password reset, email verification, account deletion, and audit logging.
+- [ ] Implement payment provider signed webhooks, refunds, cancellations, and reconciliation.
+- [ ] Add per-user VLESS UUID generation and automated Xray client provisioning/revocation.
+- [ ] Test Happ import, expiry, revocation, failover, and latency from multiple continents.
+- [ ] Publish privacy policy, terms, support process, and applicable legal notices.
