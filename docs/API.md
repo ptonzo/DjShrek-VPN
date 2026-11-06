@@ -8,27 +8,38 @@ Base URL: `http://localhost:8000`
 - `POST /api/auth/register` — create a user account.
 - `POST /api/auth/login` — obtain a 24-hour bearer access token.
 - `GET /api/me` — current account and subscription metadata.
-- `POST /api/admin/subscriptions` — admin-key protected subscription issuance.
-- `GET /s/{subscription_token}` — base64-encoded VLESS URI list for supported clients.
+- `POST /api/admin/subscriptions` — admin-key protected subscription issuance with five individual VLESS URIs.
+- `POST /api/admin/subscriptions/{id}/revoke` — revoke a subscription.
+- `GET /s/{subscription_token}` — base64-encoded VLESS URI list for compatible clients such as Happ.
 
-## Register
-
-```json
-{"email":"user@example.com","password":"use-a-long-unique-password"}
-```
-
-## Login
+## Register / login
 
 ```json
 {"email":"user@example.com","password":"use-a-long-unique-password"}
 ```
 
-## Admin subscription issuance
+Passwords must be at least 12 characters. The response includes a 24-hour bearer token.
 
-Send `X-Admin-Key: <DJSHREK_ADMIN_API_KEY>` and JSON:
+## Issue a subscription
+
+Send `X-Admin-Key: <DJSHREK_ADMIN_API_KEY>` and JSON containing the registered customer's email, duration, and five per-customer VLESS URIs:
 
 ```json
-{"email":"user@example.com","days":30}
+{
+  "email": "user@example.com",
+  "days": 30,
+  "nodes": [
+    {"node_id":"de-1","vless_uri":"vless://CUSTOMER_UUID@de.example:443?..."},
+    {"node_id":"fi-1","vless_uri":"vless://CUSTOMER_UUID@fi.example:443?..."},
+    {"node_id":"nl-1","vless_uri":"vless://CUSTOMER_UUID@nl.example:443?..."},
+    {"node_id":"pl-1","vless_uri":"vless://CUSTOMER_UUID@pl.example:443?..."},
+    {"node_id":"us-1","vless_uri":"vless://CUSTOMER_UUID@us.example:443?..."}
+  ]
+}
 ```
 
-The one-time response contains a secret subscription URL. Store it securely; do not publish it or place it in logs. The current implementation can issue an account entitlement, but actual VLESS links are returned only for nodes whose private connection settings have been configured in deployment environment. Payment is not yet connected.
+The five URIs must be generated for that customer and correspond to unique client identities provisioned on the five Xray nodes. The response contains a secret subscription URL. Store and share it securely. Revocation disables that subscription URL, but does not itself remove UUIDs from Xray; automate that server-side action before production.
+
+## Billing
+
+`GET /api/billing/status` reports that billing is disabled. Payment provider credentials and a verified signed webhook handler must be implemented before accepting payments.
