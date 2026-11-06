@@ -10,7 +10,7 @@ services:
     volumes:
       - djshrek-data:/app/data
     environment:
-      DATABASE_URL: sqlite:////app/data/djshrek.db
+      DATABASE_PATH: /app/data/djshrek.db
 
 volumes:
   djshrek-data:
