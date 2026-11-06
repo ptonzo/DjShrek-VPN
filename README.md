@@ -2,7 +2,7 @@
 
 Global VPN subscription platform with five paid, globally reachable exit nodes.
 
-> **Status: development scaffold (v0.2).** Account registration/login, token-based subscription delivery endpoints, a landing page, and node health API are implemented. This is not yet a production VPN: real VPS nodes, Xray inbounds, billing webhooks, and deployment credentials must still be configured and tested.
+> **Status: development scaffold (v0.3).** Account registration/login, token-based subscription delivery, per-subscription VLESS credential storage, a landing page, and node health API are implemented. This is not yet a production VPN: real VPS nodes, Xray inbounds, payment webhooks, and deployment credentials must still be configured and tested.
 
 ## Product scope
 
@@ -10,8 +10,9 @@ Global VPN subscription platform with five paid, globally reachable exit nodes.
 - Five global VPN nodes: Germany, Finland, Netherlands, Poland, United States
 - Server-side node health checks and latency fallback
 - Customer accounts and bearer-token authentication
-- Admin-issued subscription entitlements
+- Admin-issued subscriptions with individual five-node VLESS credential sets
 - Base64 VLESS subscription response for compatible clients such as Happ
+- Admin subscription revocation
 - Docker Compose deployment foundation
 
 ## Stack
@@ -33,7 +34,9 @@ Open `http://localhost:8000` and `http://localhost:8000/docs`.
 
 ## Provisioning the five nodes
 
-Set `NODE_CONFIG_JSON` as a private environment variable in the deployment environment. It must be a JSON array with entries for the fixed IDs `de-1`, `fi-1`, `nl-1`, `pl-1`, and `us-1`. Each entry needs `host`, `probe_port`, and a complete customer-facing `vless_uri`. Keep this configuration out of Git. The URI must contain valid server-side Xray parameters and must be tested with Happ before customer distribution.
+Set `NODE_CONFIG_JSON` privately at deployment with hostnames and probe ports for node IDs `de-1`, `fi-1`, `nl-1`, `pl-1`, and `us-1`. Never put VLESS URIs or private credentials in the public node catalog or Git.
+
+For each customer, provision five unique VLESS client identities in Xray (one per node), then pass those five URIs to the admin subscription issuance endpoint. The application stores the five URIs against that customer's subscription, not as a shared fleet-wide credential. Actual Xray provisioning/revocation automation is still to be implemented and must be validated before production.
 
 The server-side probe measures TCP reachability and latency from the API host. It is not the customer's real ping. For global users, configure client-side latency testing in the client or app and select the lowest-latency healthy endpoint from the device.
 
@@ -49,10 +52,10 @@ Payment is intentionally disabled. A production payment provider must be selecte
 
 - [ ] Provision and harden five paid VPS instances.
 - [ ] Install and configure Xray on each node; validate inbound reachability.
+- [ ] Automate unique per-user UUID provisioning and removal across all five Xray nodes.
 - [ ] Set strong secrets through the hosting provider's secret manager.
 - [ ] Use PostgreSQL, automated backups, TLS, firewalling, rate limits, and monitoring.
 - [ ] Implement password reset, email verification, account deletion, and audit logging.
 - [ ] Implement payment provider signed webhooks, refunds, cancellations, and reconciliation.
-- [ ] Add per-user VLESS UUID generation and automated Xray client provisioning/revocation.
 - [ ] Test Happ import, expiry, revocation, failover, and latency from multiple continents.
 - [ ] Publish privacy policy, terms, support process, and applicable legal notices.
