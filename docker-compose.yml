@@ -1,0 +1,16 @@
+services:
+  api:
+    build: .
+    container_name: djshrek-vpn-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - djshrek-data:/app/data
+    environment:
+      DATABASE_URL: sqlite:////app/data/djshrek.db
+
+volumes:
+  djshrek-data:
