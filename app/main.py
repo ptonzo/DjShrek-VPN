@@ -29,9 +29,14 @@ class Credentials(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=128)
 
+class NodeCredential(BaseModel):
+    node_id: str
+    vless_uri: str = Field(min_length=20, max_length=4096)
+
 class SubscriptionRequest(BaseModel):
     email: EmailStr
     days: int = Field(default=30, ge=1, le=365)
+    nodes: list[NodeCredential] = Field(min_length=5, max_length=5)
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -100,6 +105,12 @@ def billing():
 @app.post("/api/admin/subscriptions", dependencies=[Depends(require_admin)], status_code=201)
 def issue_subscription(data: SubscriptionRequest):
     email = str(data.email).lower()
+    required_ids = {"de-1", "fi-1", "nl-1", "pl-1", "us-1"}
+    supplied_ids = {node.node_id for node in data.nodes}
+    if supplied_ids != required_ids or len(supplied_ids) != 5:
+        raise HTTPException(status_code=422, detail="Exactly one credential for each of the five configured node IDs is required")
+    if any(not node.vless_uri.startswith("vless://") for node in data.nodes):
+        raise HTTPException(status_code=422, detail="Each node credential must be a VLESS URI")
     with connect() as db:
         user = db.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
         if not user:
@@ -107,8 +118,9 @@ def issue_subscription(data: SubscriptionRequest):
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         expires = (utcnow() + timedelta(days=data.days)).isoformat()
-        cur = db.execute("INSERT INTO subscriptions(user_id,token_hash,expires_at,active,created_at) VALUES(?,?,?,?,?)",
-                         (user["id"], token_hash, expires, 1, utcnow().isoformat()))
+        node_uris = json.dumps([node.vless_uri for node in data.nodes])
+        cur = db.execute("INSERT INTO subscriptions(user_id,token_hash,expires_at,active,vless_uris_json,created_at) VALUES(?,?,?,?,?,?)",
+                         (user["id"], token_hash, expires, 1, node_uris, utcnow().isoformat()))
         sub_id = cur.lastrowid
     return {"subscription_id": sub_id, "subscription_url": f"{settings.public_base_url.rstrip('/')}/s/{raw_token}",
             "expires_at": expires, "warning": "Treat this URL as a password. Share it only with the customer."}
@@ -125,16 +137,15 @@ def revoke_subscription(subscription_id: int):
 def subscription(token: str):
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     with connect() as db:
-        sub = db.execute("""SELECT s.expires_at,s.active FROM subscriptions s
+        sub = db.execute("""SELECT s.expires_at,s.active,s.vless_uris_json FROM subscriptions s
                             WHERE s.token_hash=? ORDER BY s.id DESC LIMIT 1""", (token_hash,)).fetchone()
     if not sub or not sub["active"] or datetime.fromisoformat(sub["expires_at"]) <= utcnow():
         raise HTTPException(status_code=404, detail="Subscription not found or expired")
     try:
-        node_configs = json.loads(settings.node_config_json)
+        uris = json.loads(sub["vless_uris_json"])
     except json.JSONDecodeError:
-        raise HTTPException(status_code=503, detail="Node configuration is invalid")
-    uris = [n.get("vless_uri") for n in node_configs if isinstance(n, dict) and n.get("vless_uri", "").startswith("vless://")]
-    if not uris:
-        raise HTTPException(status_code=503, detail="VPN nodes are not provisioned yet")
+        raise HTTPException(status_code=503, detail="Subscription configuration is invalid")
+    if len(uris) != 5 or any(not uri.startswith("vless://") for uri in uris):
+        raise HTTPException(status_code=503, detail="Personal VPN credentials have not been provisioned")
     payload = base64.b64encode("\n".join(uris).encode()).decode()
     return PlainTextResponse(payload, media_type="text/plain")
